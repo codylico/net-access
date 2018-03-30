@@ -329,7 +329,7 @@ int main(int argc, char**argv){
         } else {
           fprintf(stderr,"dhclient is not running.\n");
         }
-      } else {
+      } else if (line_string[0] != 0){
         fputs("Unknown command.\n",stderr);
       }
       free(line_string);
