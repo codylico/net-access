@@ -49,6 +49,7 @@ static char const na_help_text[] =
   "(?g) ?wpa_gui ........... check wpa_gui process status\n"
   "(-g) -wpa_gui ........... terminate wpa_gui process\n"
   "(+d) +dhclient .......... start dhclient to acquire and lease an IP address\n"
+  "(~d) ~dhclient .......... start dhclient to release an IP address\n"
   "(?d) ?dhclient .......... check dhclient process status\n"
   "(-d) -dhclient .......... terminate dhclient process\n";
 /**
@@ -201,7 +202,6 @@ int main(int argc, char**argv){
           int run_result;
           char const* start_array[] = {
             "/usr/sbin/wpa_supplicant",
-            "-d",
             "-iwlan0",
             "-c/etc/wpa_supplicant.conf",
             NULL
@@ -278,7 +278,29 @@ int main(int argc, char**argv){
           int run_result;
           char const* start_array[] = {
             "/sbin/dhclient",
-            "-d",
+            "-v",
+            "wlan0",
+            NULL
+          };
+          free(line_string);
+          line_string = NULL;
+          run_result = na_start_process(&dhclient_pid,start_array);
+          if (run_result < 0){
+            fprintf(stderr,"Failed to start dhclient.\n");
+          }
+        }
+      } else if (strcmp("~dhclient",line_string) == 0
+      ||  strcmp("~d",line_string) == 0)
+      {
+        int check_result = na_check_process(&dhclient_pid);
+        if (check_result){
+          fprintf(stderr,"dhclient may already be running.\n");
+        } else {
+          int run_result;
+          char const* start_array[] = {
+            "/sbin/dhclient",
+            "-v",
+            "-r",
             "wlan0",
             NULL
           };
