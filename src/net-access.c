@@ -6,10 +6,15 @@
 #include <string.h>
 
 /**
+ * \brief Get a line of text from `stdin`.
+ * \param[out] ptr string pointer to receive the text
  * \return zero on success, `-5` on empty array,
  *   `-2` on failed allocation
  */
-static int na_getline(char**);
+static int na_getline(char** ptr);
+/**
+ * \brief Help text.
+ */
 static char const na_help_text[] =
   "Commands:\n"
   "Help................ print this help text\n"
@@ -61,6 +66,7 @@ int main(int argc, char**argv){
         fprintf(stderr,"Quitting...\n");
         fgets_result = -5;
       } else if (strcmp("h",line_string) == 0
+      ||  strcmp("?",line_string) == 0
       ||  strcmp("help",line_string) == 0)
       {
         fputs(na_help_text,stderr);
