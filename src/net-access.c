@@ -40,14 +40,14 @@ static int na_finish_process(pid_t *pid);
  */
 static char const na_help_text[] =
   "Commands:\n"
-  "(h)  help................ print this help text\n"
-  "(q)  quit................ quit this program\n"
-  "(+w) +wpa_supplicant..... start wpa_supplicant\n"
-  "(?w) ?wpa_supplicant..... check wpa_supplicant process status\n"
-  "(-w) -wpa_supplicant..... terminate wpa_supplicant process\n"
-  "(+g) +wpa_gui............ start wpa_gui\n"
-  "(?g) ?wpa_gui............ check wpa_gui process status\n"
-  "(-g) -wpa_gui............ terminate wpa_gui process\n";
+  "(h)  help ............... print this help text\n"
+  "(q)  quit ............... quit this program\n"
+  "(+w) +wpa_supplicant .... start wpa_supplicant\n"
+  "(?w) ?wpa_supplicant .... check wpa_supplicant process status\n"
+  "(-w) -wpa_supplicant .... terminate wpa_supplicant process\n"
+  "(+g) +wpa_gui ........... start wpa_gui\n"
+  "(?g) ?wpa_gui ........... check wpa_gui process status\n"
+  "(-g) -wpa_gui ........... terminate wpa_gui process\n";
 /**
  * \brief Process ID for `wpa_supplicant`.
  */
@@ -213,7 +213,7 @@ int main(int argc, char**argv){
         if (check_result){
           fprintf(stderr,"wpa_supplicant is running.\n");
         } else {
-          fprintf(stderr,"wpa_supplicant has terminated.\n");
+          fprintf(stderr,"wpa_supplicant is not running.\n");
         }
       } else if (strcmp("-wpa_supplicant",line_string) == 0
       ||  strcmp("-w",line_string) == 0)
@@ -222,7 +222,7 @@ int main(int argc, char**argv){
         if (finish_result){
           fprintf(stderr,"wpa_supplicant is running.\n");
         } else {
-          fprintf(stderr,"wpa_supplicant has terminated.\n");
+          fprintf(stderr,"wpa_supplicant is not running.\n");
         }
       } else if (strcmp("+wpa_gui",line_string) == 0
       ||  strcmp("+g",line_string) == 0)
@@ -250,7 +250,7 @@ int main(int argc, char**argv){
         if (check_result){
           fprintf(stderr,"wpa_gui is running.\n");
         } else {
-          fprintf(stderr,"wpa_gui has terminated.\n");
+          fprintf(stderr,"wpa_gui is not running.\n");
         }
       } else if (strcmp("-wpa_gui",line_string) == 0
       ||  strcmp("-g",line_string) == 0)
@@ -259,7 +259,7 @@ int main(int argc, char**argv){
         if (finish_result){
           fprintf(stderr,"wpa_gui is running.\n");
         } else {
-          fprintf(stderr,"wpa_gui has terminated.\n");
+          fprintf(stderr,"wpa_gui is not running.\n");
         }
       } else {
         fputs("Unknown command.\n",stderr);
