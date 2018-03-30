@@ -56,6 +56,8 @@ int na_getline(char** recv_ptr){
   char* fgets_res;
   size_t current_length = 0;
   int result = 0;
+  fprintf(stderr,"> ");
+  fflush(NULL);
   while ((fgets_res = fgets(buf,64,stdin)) == buf){
     size_t len = strlen(buf);
     char* new_ptr = (char*)realloc(long_ptr,sizeof(char)*current_length+len+1);
