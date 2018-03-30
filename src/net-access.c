@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
+#include <errno.h>
 
 /**
  * \brief Get a line of text from `stdin`.
@@ -13,12 +15,40 @@
  */
 static int na_getline(char** ptr);
 /**
+ * \brief Check a process for termination.
+ * \param[in,out] pid the ID of the process to check
+ * \return nonzero if the process is still running,
+ *   zero otherwise
+ */
+static int na_check_process(pid_t *pid);
+/**
+ * \brief Start a process.
+ * \param[out] pid the ID of the process to start
+ * \param argv program arguments
+ * \return zero on fork success
+ */
+static int na_start_process(pid_t *pid, const char** argv);
+/**
+ * \brief Terminate a process.
+ * \param[in,out] pid the ID of the process to terminate
+ * \return nonzero if the process is still running,
+ *   zero otherwise
+ */
+static int na_finish_process(pid_t *pid);
+/**
  * \brief Help text.
  */
 static char const na_help_text[] =
   "Commands:\n"
-  "Help................ print this help text\n"
-  "Quit................ quit this program\n";
+  "(h)  help................ print this help text\n"
+  "(q)  quit................ quit this program\n"
+  "(+w) +wpa_supplicant..... start wpa_supplicant\n"
+  "(?w) ?wpa_supplicant..... check wpa_supplicant process status\n"
+  "(-w) -wpa_supplicant..... terminate wpa_supplicant process\n";
+/**
+ * \brief Process ID for `wpa_supplicant`.
+ */
+static pid_t supplicant_pid = -1;
 
 int na_getline(char** recv_ptr){
   char buf[64];
@@ -50,6 +80,81 @@ int na_getline(char** recv_ptr){
   if (fgets_res == 0) result = -5;
   return result;
 }
+int na_check_process(pid_t* pid){
+  if (*pid < 0) return 0;
+  else {
+    int wstatus;
+    pid_t new_pid = waitpid(*pid,&wstatus,WNOHANG);
+    if (new_pid == 0) return 1;
+    else if (new_pid == *pid){
+      if (WIFEXITED(wstatus) || WIFSIGNALED(wstatus)){
+        if (WIFEXITED(wstatus)){
+          fprintf(stderr,"Process %i exited with result %i.\n",
+              (int)*pid, (int)WEXITSTATUS(wstatus));
+        } else {
+          fprintf(stderr,"Process %i terminated by signal %i.\n",
+              (int)*pid, (int)WTERMSIG(wstatus));
+        }
+        *pid = -1;
+        return 0;
+      }
+    }
+  }
+}
+int na_start_process(pid_t *pid, const char** argv){
+  pid_t cross_pid;
+  if (*pid >= 0) return -3;
+  cross_pid = fork();
+  if (cross_pid == -1){
+    int error_result = errno;
+    fprintf(stderr,"Failed to fork child process:\n\t%s\n",
+        strerror(error_result));
+    return -6;
+  } else if (cross_pid == 0){
+    /* child process */
+    int exec_result = execv(argv[0],(char *const*)argv);
+    if (exec_result == -1){
+      int error_result = errno;
+      fprintf(stderr,"Failed to execute process:\n\t%s\n",
+        strerror(error_result));
+    }
+    exit(EXIT_FAILURE);
+  } else {
+    /* parent process */
+    *pid = cross_pid;
+    fprintf(stderr,"Process %i has started.\n",(int)*pid);
+    return 0;
+  }
+}
+int na_finish_process(pid_t *pid){
+  int kill_result;
+  if (*pid < 0) return 0;
+  kill_result = kill(*pid,SIGTERM);
+  if (kill_result == -1){
+    int error_result = errno;
+    fprintf(stderr,"Failed to terminate process %i:\n\t%s\n",
+      (int)*pid, strerror(error_result));
+    return -1;
+  } else {
+    /* update status */
+    int wstatus;
+    pid_t new_pid = waitpid(*pid,&wstatus,0);
+    if (new_pid == 0) return 1;
+    else if (new_pid == *pid){
+      if (WIFEXITED(wstatus) || WIFSIGNALED(wstatus)){
+        if (WIFEXITED(wstatus)){
+          fprintf(stderr,"Process %i exited with result %i.\n",
+              (int)*pid, (int)WEXITSTATUS(wstatus));
+        } else {
+          fprintf(stderr,"Process %i terminated by signal %i.\n",
+              (int)*pid, (int)WTERMSIG(wstatus));
+        }
+        *pid = -1;
+        return 0;
+      }
+    }
+  }
+}
 
 int main(int argc, char**argv){
   int fgets_result;
@@ -70,10 +175,52 @@ int main(int argc, char**argv){
       ||  strcmp("help",line_string) == 0)
       {
         fputs(na_help_text,stderr);
+      } else if (strcmp("+wpa_supplicant",line_string) == 0
+      ||  strcmp("+w",line_string) == 0)
+      {
+        int check_result = na_check_process(&supplicant_pid);
+        if (check_result){
+          fprintf(stderr,"wpa_supplicant may already be running.\n");
+        } else {
+          int run_result;
+          char const* start_array[] = {
+            "/usr/sbin/wpa_supplicant",
+            "-d",
+            "-iwlan0",
+            "-c/etc/wpa_supplicant.conf",
+            NULL
+          };
+          free(line_string);
+          line_string = NULL;
+          run_result = na_start_process(&supplicant_pid,start_array);
+          if (run_result < 0){
+            fprintf(stderr,"Failed to start wpa_supplicant.\n");
+          }
+        }
+      } else if (strcmp("?wpa_supplicant",line_string) == 0
+      ||  strcmp("?w",line_string) == 0)
+      {
+        int check_result = na_check_process(&supplicant_pid);
+        if (check_result){
+          fprintf(stderr,"wpa_supplicant is running.\n");
+        } else {
+          fprintf(stderr,"wpa_supplicant has terminated.\n");
+        }
+      } else if (strcmp("-wpa_supplicant",line_string) == 0
+      ||  strcmp("-w",line_string) == 0)
+      {
+        int finish_result = na_finish_process(&supplicant_pid);
+        if (finish_result){
+          fprintf(stderr,"wpa_supplicant is running.\n");
+        } else {
+          fprintf(stderr,"wpa_supplicant has terminated.\n");
+        }
       } else {
         fputs("Unknown command.\n",stderr);
       }
+      free(line_string);
     }
   } while (fgets_result != -5);
+  na_finish_process(&supplicant_pid);
   return EXIT_SUCCESS;
 }
