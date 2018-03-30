@@ -44,11 +44,18 @@ static char const na_help_text[] =
   "(q)  quit................ quit this program\n"
   "(+w) +wpa_supplicant..... start wpa_supplicant\n"
   "(?w) ?wpa_supplicant..... check wpa_supplicant process status\n"
-  "(-w) -wpa_supplicant..... terminate wpa_supplicant process\n";
+  "(-w) -wpa_supplicant..... terminate wpa_supplicant process\n"
+  "(+g) +wpa_gui............ start wpa_gui\n"
+  "(?g) ?wpa_gui............ check wpa_gui process status\n"
+  "(-g) -wpa_gui............ terminate wpa_gui process\n";
 /**
  * \brief Process ID for `wpa_supplicant`.
  */
 static pid_t supplicant_pid = -1;
+/**
+ * \brief Process ID for `wpa_gui`.
+ */
+static pid_t gui_pid = -1;
 
 int na_getline(char** recv_ptr){
   char buf[64];
@@ -217,12 +224,50 @@ int main(int argc, char**argv){
         } else {
           fprintf(stderr,"wpa_supplicant has terminated.\n");
         }
+      } else if (strcmp("+wpa_gui",line_string) == 0
+      ||  strcmp("+g",line_string) == 0)
+      {
+        int check_result = na_check_process(&gui_pid);
+        if (check_result){
+          fprintf(stderr,"wpa_gui may already be running.\n");
+        } else {
+          int run_result;
+          char const* start_array[] = {
+            "/usr/bin/wpa_gui",
+            NULL
+          };
+          free(line_string);
+          line_string = NULL;
+          run_result = na_start_process(&gui_pid,start_array);
+          if (run_result < 0){
+            fprintf(stderr,"Failed to start wpa_gui.\n");
+          }
+        }
+      } else if (strcmp("?wpa_gui",line_string) == 0
+      ||  strcmp("?g",line_string) == 0)
+      {
+        int check_result = na_check_process(&gui_pid);
+        if (check_result){
+          fprintf(stderr,"wpa_gui is running.\n");
+        } else {
+          fprintf(stderr,"wpa_gui has terminated.\n");
+        }
+      } else if (strcmp("-wpa_gui",line_string) == 0
+      ||  strcmp("-g",line_string) == 0)
+      {
+        int finish_result = na_finish_process(&gui_pid);
+        if (finish_result){
+          fprintf(stderr,"wpa_gui is running.\n");
+        } else {
+          fprintf(stderr,"wpa_gui has terminated.\n");
+        }
       } else {
         fputs("Unknown command.\n",stderr);
       }
       free(line_string);
     }
   } while (fgets_result != -5);
+  na_finish_process(&gui_pid);
   na_finish_process(&supplicant_pid);
   return EXIT_SUCCESS;
 }
