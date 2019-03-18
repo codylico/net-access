@@ -8,6 +8,10 @@
 #include <errno.h>
 #include <limits.h>
 
+#if (defined NA_USE_LINENOISE)
+#  include "../deps/linenoise/linenoise.h"
+#endif /*NA_USE_LINENOISE*/
+
 #if !(defined NA_INTERFACE_MAX)
 #  define NA_INTERFACE_MAX 255
 #endif /*NA_INTERFACE_MAX*/
@@ -96,6 +100,16 @@ static char* na_next_iface = NULL;
 static char const* na_next_iface_const;
 
 int na_getline(char** recv_ptr, char const* prompt){
+#if (defined NA_USE_LINENOISE)
+  char* long_ptr = linenoise(prompt);
+  if (long_ptr != NULL){
+    *recv_ptr = long_ptr;
+    return 0;
+  } else {
+    *recv_ptr = NULL;
+    return -5;
+  }
+#else
   char buf[64];
   char* long_ptr = NULL;
   char* fgets_res;
@@ -126,6 +140,7 @@ int na_getline(char** recv_ptr, char const* prompt){
   *recv_ptr = long_ptr;
   if (fgets_res == 0) result = -5;
   return result;
+#endif /*NA_USE_LINENOISE*/
 }
 
 int na_iface_verify(char const* str){
