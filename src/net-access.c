@@ -279,6 +279,7 @@ int main(int argc, char**argv){
           char const* start_array[] = {
             "/sbin/dhclient",
             "-v",
+            "-1",
             "wlan0",
             NULL
           };
