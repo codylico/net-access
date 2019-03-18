@@ -6,14 +6,28 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <errno.h>
+#include <limits.h>
 
+#if !(defined NA_INTERFACE_MAX)
+#  define NA_INTERFACE_MAX 255
+#endif /*NA_INTERFACE_MAX*/
+
+/*#define NA_ALLOW_INTERFACE*/
+
+/**
+ * \brief Check for a valid interface name.
+ * \param str the name to check
+ * \return nonzero if the interface is valid, zero otherwise
+ */
+static int na_iface_verify(char const* str);
 /**
  * \brief Get a line of text from `stdin`.
  * \param[out] ptr string pointer to receive the text
+ * \param prompt string to display before user input
  * \return zero on success, `-5` on empty array,
  *   `-2` on failed allocation
  */
-static int na_getline(char** ptr);
+static int na_getline(char** ptr, char const* prompt);
 /**
  * \brief Check a process for termination.
  * \param[in,out] pid the ID of the process to check
@@ -51,7 +65,11 @@ static char const na_help_text[] =
   "(+d) +dhclient .......... start dhclient to acquire and lease an IP address\n"
   "(~d) ~dhclient .......... start dhclient to release an IP address\n"
   "(?d) ?dhclient .......... check dhclient process status\n"
-  "(-d) -dhclient .......... terminate dhclient process\n";
+  "(-d) -dhclient .......... terminate dhclient process\n"
+  "(+i) +interface ......... set target network interface\n"
+  "(?i) ?interface ......... print current target network interface\n"
+  "(-i) -interface ......... reset target network interface to default\n"
+  ;
 /**
  * \brief Process ID for `wpa_supplicant`.
  */
@@ -64,14 +82,26 @@ static pid_t gui_pid = -1;
  * \brief Process ID for `dhclient`.
  */
 static pid_t dhclient_pid = -1;
+/**
+ * \brief Default interface.
+ */
+static char const* na_iface_wlan0 = "wlan0";
+/**
+ * \brief Pointer to current user-specified interface string.
+ */
+static char* na_next_iface = NULL;
+/**
+ * \brief Pointer to current interface string.
+ */
+static char const* na_next_iface_const;
 
-int na_getline(char** recv_ptr){
+int na_getline(char** recv_ptr, char const* prompt){
   char buf[64];
   char* long_ptr = NULL;
   char* fgets_res;
   size_t current_length = 0;
   int result = 0;
-  fprintf(stderr,"> ");
+  fprintf(stderr,prompt);
   fflush(NULL);
   while ((fgets_res = fgets(buf,64,stdin)) == buf){
     size_t len = strlen(buf);
@@ -97,6 +127,39 @@ int na_getline(char** recv_ptr){
   if (fgets_res == 0) result = -5;
   return result;
 }
+
+int na_iface_verify(char const* str){
+  if (str != NULL){
+    size_t len = 0;
+    size_t i;
+    /* check length of interface name */
+    for (i = 0; i < SHRT_MAX; ++i){
+      if (str[i] == 0){
+        len = i;
+        break;
+      }
+    }
+    if (len == 0)
+      return 0;
+    if (len >= (NA_INTERFACE_MAX))
+      return 0;
+    /* check the contents of the string */
+    for (i = 0; i < len; ++i){
+      char const c = str[i];
+      if ((c < 0x30 || c > 0x3A)
+      &&  (c < 0x41 || c > 0x5A)
+      &&  (c < 0x61 || c > 0x7a)
+      &&  (c != 0x5f))
+      {
+        /* invalid interface name, break */
+        return 0;
+      }
+    }
+    /* allow */
+    return 1;
+  } else return 0;
+}
+
 int na_check_process(pid_t* pid){
   if (*pid < 0) return 0;
   else {
@@ -175,9 +238,10 @@ int na_finish_process(pid_t *pid){
 
 int main(int argc, char**argv){
   int fgets_result;
+  na_next_iface_const = na_iface_wlan0;
   do {
     char *line_string;
-    fgets_result = na_getline(&line_string);
+    fgets_result = na_getline(&line_string, "> ");
     if (line_string != NULL){
       /* process the command */
       if (line_string[0] == '#'){
@@ -202,7 +266,8 @@ int main(int argc, char**argv){
           int run_result;
           char const* start_array[] = {
             "/usr/sbin/wpa_supplicant",
-            "-iwlan0",
+            "-i",
+            na_next_iface_const,
             "-c/etc/wpa_supplicant.conf",
             NULL
           };
@@ -280,7 +345,7 @@ int main(int argc, char**argv){
             "/sbin/dhclient",
             "-v",
             "-1",
-            "wlan0",
+            na_next_iface_const,
             NULL
           };
           free(line_string);
@@ -302,7 +367,7 @@ int main(int argc, char**argv){
             "/sbin/dhclient",
             "-v",
             "-r",
-            "wlan0",
+            na_next_iface_const,
             NULL
           };
           free(line_string);
@@ -330,6 +395,31 @@ int main(int argc, char**argv){
         } else {
           fprintf(stderr,"dhclient is not running.\n");
         }
+      } else if (strcmp("-interface",line_string) == 0
+      ||  strcmp("-i",line_string) == 0)
+      {
+        fprintf(stderr,"Resetting interface to default (%s).\n",
+            na_iface_wlan0);
+      } else if (strcmp("?interface",line_string) == 0
+      ||  strcmp("?i",line_string) == 0)
+      {
+        fprintf(stderr,"Interface: %s\n", na_next_iface_const);
+      } else if (strcmp("+interface",line_string) == 0
+      ||  strcmp("+i",line_string) == 0)
+      {
+#if (defined NA_ALLOW_INTERFACE)
+        char *iface_string;
+        fgets_result = na_getline(&iface_string, "new interface: ");
+        if (na_iface_verify(iface_string)){
+          free(na_next_iface);
+          na_next_iface = iface_string;
+          na_next_iface_const = na_next_iface;
+        } else {
+          fprintf(stderr,"Interface string not accepted.\n");
+        }
+#else
+        fprintf(stderr,"Interface setting is disabled.\n");
+#endif /*NA_ALLOW_INTERFACE*/
       } else if (line_string[0] != 0){
         fputs("Unknown command.\n",stderr);
       }
@@ -339,5 +429,7 @@ int main(int argc, char**argv){
   na_finish_process(&dhclient_pid);
   na_finish_process(&gui_pid);
   na_finish_process(&supplicant_pid);
+  free(na_next_iface);
+  na_next_iface = NULL;
   return EXIT_SUCCESS;
 }
